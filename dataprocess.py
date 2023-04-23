@@ -75,11 +75,44 @@ def find_plate(imageRGB) -> np.array :
     imageMask = cv.drawContours(imageRGB, boxes, -1, (0, 0, 255), 5)
     cv.imwrite("test5.png", imageMask)
 
+    return boxes
     
-    
+def split_plate(boxes, imageRGB):
+    imageList = []
+    for box in boxes:
+        ######## left or right ########
+        if (box[0][1] < box[1][1]):
+            x1, y1 = box[0]
+            x2, y2 = box[1]
+            x3, y3 = box[2]
+            x4, y4 = box[3]
+        else:
+            x2, y2 = box[0]
+            x1, y1 = box[1]
+            x4, y4 = box[2]
+            x3, y3 = box[3]
+
+
+        width = int(max( np.linalg.norm(np.array([x1 - x2, y1 - y2]), ord = 2), \
+            np.linalg.norm(np.array([x3 - x4, y3 - y4]), ord = 2) ))
+        height = max(abs(y1 - y3), abs(y2 - y4))
+        dst = np.array([[0, 0], [width - 1, 0], \
+            [width - 1, height - 1], [0, height - 1]])
+        box_ = np.array([[x1, y1], [x2, y2], \
+            [x3, y3], [x4, y4]])
+
+        M = cv.getPerspectiveTransform(box_.astype("float32"), dst.astype("float32"))
+        # print(box_)
+        warped = cv.warpPerspective(imageRGB, M, (width, height))
+        cv.imwrite("test6.png", warped)
+
+        imageList.append(warped)
+    return imageList
+
 
 if __name__ == '__main__':
-    image_path = "./images/difficult/3-2.jpg"
+    image_path = "./images/difficult/3-1.jpg"
     imageRGB = cv.imread(image_path)
     cv.imwrite("test.png", imageRGB)
-    find_plate(imageRGB)
+    contourBoxes = find_plate(imageRGB.copy())
+    plates = split_plate(contourBoxes, imageRGB.copy())
