@@ -39,8 +39,6 @@ def find_plate(imageRGB) -> np.array :
     MinArea = 3000
     contourCandidates, _ = cv.findContours(imageMask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
     contourCandidates = [candidate for candidate in contourCandidates if cv.contourArea(candidate) > MinArea]
-    # print(len(contourCandidates))
-    # print(contourCandidates)
     boxes = []
     for candidate in contourCandidates:
         rect = cv.minAreaRect(candidate)
@@ -51,58 +49,59 @@ def find_plate(imageRGB) -> np.array :
             
         if width / height < 2.5 or width / height > 5.0:
             continue
-        # print(width/height)
         box = cv.boxPoints(rect)
         
         ######## left or right ########
         if theta > 45:
             dy = height / math.sin(math.radians(theta))
+            x2, y2 = box[1]
+            x4, y4 = box[3]
+            x1 = x4
+            y1 = y4 - dy
+            x3 = x2
+            y3 = y2 + dy
         else :
             dy = height / math.cos(math.radians(theta))
-        x2, y2 = box[1]
-        x4, y4 = box[3]
-        x1 = x4
-        y1 = y4 - dy
-        x3 = x2
-        y3 = y2 + dy
-        box = makeBOX([x1, y1], [x2, y2], [x3, y3], [x4, y4])
-        # print(box)
+            x1, y1 = box[1]
+            x3, y3 = box[3]
+            x2 = x3
+            y2 = y3 - dy
+            x4 = x1
+            y4 = y1 + dy
         
+        ######## fixes ########
+        x1, x2, x3, x4 = int(x1), int(x2), int(x3), int(x4)
+        y1, y2, y3, y4 = int(y1), int(y2), int(y3), int(y4)
+        while imageMask[int(rect[0][1]), x1] == 0: x1 += 1
+        while imageMask[int(rect[0][1]), x3] == 0: x3 -= 1
+        box = makeBOX([x1, y1], [x2, y2], [x3, y3], [x4, y4])
+
         boxes.append(np.intp(box))
     
-    # print(len(boxes))
-    # print(boxes[0])
-    imageMask = cv.drawContours(imageRGB, boxes, -1, (0, 0, 255), 5)
-    cv.imwrite("test5.png", imageMask)
+    
+    imageRGB = cv.drawContours(imageRGB, boxes, -1, (0, 0, 255), 5)
+    cv.imwrite("test5.png", imageRGB)
 
     return boxes
     
 def split_plate(boxes, imageRGB):
     imageList = []
     for box in boxes:
-        ######## left or right ########
-        if (box[0][1] < box[1][1]):
-            x1, y1 = box[0]
-            x2, y2 = box[1]
-            x3, y3 = box[2]
-            x4, y4 = box[3]
-        else:
-            x2, y2 = box[0]
-            x1, y1 = box[1]
-            x4, y4 = box[2]
-            x3, y3 = box[3]
+        x1, y1 = box[0]
+        x2, y2 = box[1]
+        x3, y3 = box[2]
+        x4, y4 = box[3]
 
-
-        width = int(max( np.linalg.norm(np.array([x1 - x2, y1 - y2]), ord = 2), \
-            np.linalg.norm(np.array([x3 - x4, y3 - y4]), ord = 2) ))
-        height = max(abs(y1 - y3), abs(y2 - y4))
+        # width = int(max( np.linalg.norm(np.array([x1 - x2, y1 - y2]), ord = 2), \
+        #     np.linalg.norm(np.array([x3 - x4, y3 - y4]), ord = 2) ))
+        height = max(abs(y1 - y4), abs(y2 - y3))
+        width = int(3.2 * height)
         dst = np.array([[0, 0], [width - 1, 0], \
             [width - 1, height - 1], [0, height - 1]])
         box_ = np.array([[x1, y1], [x2, y2], \
             [x3, y3], [x4, y4]])
-
+        
         M = cv.getPerspectiveTransform(box_.astype("float32"), dst.astype("float32"))
-        # print(box_)
         warped = cv.warpPerspective(imageRGB, M, (width, height))
         cv.imwrite("test6.png", warped)
 
@@ -111,8 +110,9 @@ def split_plate(boxes, imageRGB):
 
 
 if __name__ == '__main__':
-    image_path = "./images/difficult/3-1.jpg"
+    image_path = "./images/difficult/3-2.jpg"
     imageRGB = cv.imread(image_path)
     cv.imwrite("test.png", imageRGB)
     contourBoxes = find_plate(imageRGB.copy())
     plates = split_plate(contourBoxes, imageRGB.copy())
+    print(len(plates))
